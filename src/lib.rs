@@ -1,4 +1,4 @@
-extern crate varint;
+extern crate varmint;
 
 mod read;
 mod write;

@@ -1,5 +1,5 @@
 use std::io;
-use varint::ReadVarInt;
+use varmint::ReadVarInt;
 
 use MAX_MESSAGE_SIZE;
 

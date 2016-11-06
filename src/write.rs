@@ -1,5 +1,5 @@
 use std::io;
-use varint::WriteVarInt;
+use varmint::WriteVarInt;
 
 use MAX_MESSAGE_SIZE;
 
