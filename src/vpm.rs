@@ -1,21 +1,23 @@
 use std::io::{ self, Cursor, Write };
 
-use byteorder::{ BigEndian, ReadBytesExt, WriteBytesExt };
+use varmint::{ ReadVarInt, WriteVarInt };
 use tokio_core::io::{ Codec, EasyBuf };
 
-pub struct LpmCodec;
+pub struct VpmCodec;
 
-impl Codec for LpmCodec {
+impl Codec for VpmCodec {
     type In = EasyBuf;
     type Out = Vec<u8>;
 
     fn decode(&mut self, buf: &mut EasyBuf) -> io::Result<Option<Self::In>> {
-        let len = Cursor::new(&buf).read_u32::<BigEndian>();
+        let (len, len_len) = {
+            let mut cursor = Cursor::new(&buf);
+            (cursor.read_usize_varint(), cursor.position() as usize)
+        };
         match len {
             Ok(len) => {
-                let len = len as usize;
-                if len + 4 < buf.len() {
-                    buf.drain_to(4); // discard the length
+                if len + len_len < buf.len() {
+                    buf.drain_to(len_len); // discard the length
                     Ok(Some(buf.drain_to(len)))
                 } else {
                     Ok(None)
@@ -32,7 +34,7 @@ impl Codec for LpmCodec {
     }
 
     fn encode(&mut self, msg: Self::Out, buf: &mut Vec<u8>) -> io::Result<()> {
-        buf.write_u32::<BigEndian>(msg.len() as u32)?;
+        buf.write_usize_varint(msg.len())?;
         buf.write_all(&msg)?;
         Ok(())
     }

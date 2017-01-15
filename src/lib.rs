@@ -1,9 +1,9 @@
 extern crate varmint;
+extern crate byteorder;
+extern crate tokio_core;
 
-mod read;
-mod write;
+mod vpm;
+mod lpm;
 
-const MAX_MESSAGE_SIZE: usize = 8 * 1024 * 1024;
-
-pub use read::{ ReadLpm, ReadVpm };
-pub use write::{ WriteLpm, WriteVpm };
+pub use vpm::VpmCodec;
+pub use lpm::LpmCodec;
