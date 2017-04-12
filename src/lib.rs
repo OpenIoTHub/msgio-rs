@@ -71,7 +71,7 @@ impl Suffix {
     }
 }
 impl tokio_io::Codec for Codec {
-    type In = EasyBuf;
+    type In = Vec<u8>;
     type Out = Vec<u8>;
 
     fn decode(&mut self, buf: &mut EasyBuf) -> io::Result<Option<Self::In>> {
@@ -82,7 +82,7 @@ impl tokio_io::Codec for Codec {
                     let mut msg = buf.drain_to(len);
                     self.1.validate(msg.as_slice())?;
                     msg.split_off(len - self.1.len());
-                    Ok(Some(msg))
+                    Ok(Some(msg.as_ref().to_vec()))
                 } else {
                     Ok(None)
                 }
