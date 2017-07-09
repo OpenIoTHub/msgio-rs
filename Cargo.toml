@@ -1,9 +1,10 @@
 [package]
+authors = ["Wim Looman <wim@nemo157.com>"]
 name = "msgio"
 version = "0.1.0"
-authors = ["Wim Looman <wim@nemo157.com>"]
 
 [dependencies]
-varmint = "0.1.2"
 byteorder = "*"
+futures = "0.1.14"
 tokio-core = "*"
+varmint = "0.1.2"
