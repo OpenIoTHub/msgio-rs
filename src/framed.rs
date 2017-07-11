@@ -1,23 +1,23 @@
 use std::io;
 
 use futures::{Async, AsyncSink, StartSend, Stream, Sink, Poll};
-use tokio_core::io::{EasyBuf, Codec};
+use bytes::BytesMut;
 
-use MsgIo;
+use {MsgIo, Codec};
 
-pub struct MsgFramed<S: MsgIo, T: Codec<In=Vec<u8>, Out=Vec<u8>>> {
+pub struct MsgFramed<S: MsgIo, T: Codec> {
     transport: S,
     codec: T,
-    in_buffer: EasyBuf,
+    in_buffer: BytesMut,
     out_buffer_size: usize,
 }
 
-impl<S: MsgIo, T: Codec<In=Vec<u8>, Out=Vec<u8>>> MsgFramed<S, T> {
+impl<S: MsgIo, T: Codec> MsgFramed<S, T> {
     pub fn new(transport: S, codec: T) -> MsgFramed<S, T> {
         MsgFramed {
             transport,
             codec,
-            in_buffer: EasyBuf::new(),
+            in_buffer: BytesMut::new(),
             out_buffer_size: 1024,
         }
     }
@@ -27,13 +27,13 @@ impl<S: MsgIo, T: Codec<In=Vec<u8>, Out=Vec<u8>>> MsgFramed<S, T> {
     }
 }
 
-impl<S: MsgIo, T: Codec<In=Vec<u8>, Out=Vec<u8>>> Stream for MsgFramed<S, T> {
-    type Item = Vec<u8>;
+impl<S: MsgIo, T: Codec> Stream for MsgFramed<S, T> {
+    type Item = BytesMut;
     type Error = io::Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         while let Some(buffer) = try_ready!(self.transport.poll()) {
-            self.in_buffer.get_mut().extend_from_slice(&buffer);
+            self.in_buffer.extend_from_slice(&buffer);
             if let Some(item) = self.codec.decode(&mut self.in_buffer)? {
                 return Ok(Async::Ready(Some(item)));
             }
@@ -42,18 +42,18 @@ impl<S: MsgIo, T: Codec<In=Vec<u8>, Out=Vec<u8>>> Stream for MsgFramed<S, T> {
     }
 }
 
-impl<S: MsgIo, T: Codec<In=Vec<u8>, Out=Vec<u8>>> Sink for MsgFramed<S, T> {
-    type SinkItem = Vec<u8>;
+impl<S: MsgIo, T: Codec> Sink for MsgFramed<S, T> {
+    type SinkItem = BytesMut;
     type SinkError = io::Error;
 
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
-        let mut buffer = Vec::with_capacity(self.out_buffer_size);
+        let mut buffer = BytesMut::with_capacity(self.out_buffer_size);
         self.codec.encode(item, &mut buffer)?;
         self.out_buffer_size = (self.out_buffer_size + buffer.len()) / 2;
         Ok(match self.transport.start_send(buffer)? {
             AsyncSink::Ready => AsyncSink::Ready,
-            AsyncSink::NotReady(buffer) => {
-                AsyncSink::NotReady(self.codec.decode(&mut EasyBuf::from(buffer)).unwrap().expect("codec is reversible"))
+            AsyncSink::NotReady(mut buffer) => {
+                AsyncSink::NotReady(self.codec.decode(&mut buffer).unwrap().expect("codec is reversible"))
             }
         })
     }
@@ -67,4 +67,4 @@ impl<S: MsgIo, T: Codec<In=Vec<u8>, Out=Vec<u8>>> Sink for MsgFramed<S, T> {
     }
 }
 
-impl<S: MsgIo, T: Codec<In=Vec<u8>, Out=Vec<u8>>> MsgIo for MsgFramed<S, T> { }
+impl<S: MsgIo, T: Codec> MsgIo for MsgFramed<S, T> { }

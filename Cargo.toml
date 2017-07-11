@@ -4,7 +4,7 @@ name = "msgio"
 version = "0.1.0"
 
 [dependencies]
-byteorder = "*"
+bytes = "0.4.4"
 futures = "0.1.14"
-tokio-core = "*"
+tokio-io = "0.1.2"
 varmint = "0.1.2"

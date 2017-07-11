@@ -1,9 +1,10 @@
-use std::io::{ self, Cursor, Write };
+use std::io::{self, Cursor};
 
-use byteorder::{ BigEndian, ReadBytesExt, WriteBytesExt };
-use varmint::{ ReadVarInt, WriteVarInt };
-use tokio_core;
-use tokio_core::io::EasyBuf;
+use bytes::{BigEndian, Buf, BufMut, BytesMut};
+use varmint::{len_usize_varint, ReadVarInt, WriteVarInt};
+use tokio_io::codec::{Decoder, Encoder};
+
+use Codec;
 
 #[derive(Copy, Clone, Debug)]
 pub enum Prefix {
@@ -18,22 +19,32 @@ pub enum Suffix {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct Codec(pub Prefix, pub Suffix);
+pub struct LengthPrefixed(pub Prefix, pub Suffix);
 
 impl Prefix {
-    fn decode(self, bytes: &[u8]) -> io::Result<(usize, usize)> {
-        let mut cursor = Cursor::new(bytes);
+    fn decode(self, src: &[u8]) -> io::Result<(usize, usize)> {
+        let mut cursor = Cursor::new(src);
         let len = match self {
             Prefix::VarInt => cursor.read_usize_varint()?,
-            Prefix::BigEndianU32 => cursor.read_u32::<BigEndian>()? as usize,
+            Prefix::BigEndianU32 => cursor.get_u32::<BigEndian>() as usize,
         };
         Ok((len, cursor.position() as usize))
     }
 
-    fn encode(self, len: usize, buf: &mut Vec<u8>) -> io::Result<()> {
+    fn encode(self, len: usize, dst: &mut BytesMut) -> io::Result<()> {
         match self {
-            Prefix::VarInt => buf.write_usize_varint(len),
-            Prefix::BigEndianU32 => buf.write_u32::<BigEndian>(len as u32),
+            Prefix::VarInt => dst.writer().write_usize_varint(len),
+            Prefix::BigEndianU32 => {
+                dst.put_u32::<BigEndian>(len as u32);
+                Ok(())
+            }
+        }
+    }
+
+    fn encoded_len(self, len: usize) -> usize {
+        match self {
+            Prefix::VarInt => len_usize_varint(len),
+            Prefix::BigEndianU32 => 4,
         }
     }
 }
@@ -46,11 +57,11 @@ impl Suffix {
         }
     }
 
-    fn validate(self, msg: &[u8]) -> io::Result<()> {
+    fn validate(self, src: &[u8]) -> io::Result<()> {
         match self {
             Suffix::None => Ok(()),
             Suffix::NewLine => {
-                if msg[msg.len() - 1] == b'\n' {
+                if src[src.len() - 1] == b'\n' {
                     Ok(())
                 } else {
                     Err(io::Error::new(io::ErrorKind::Other, "message did not end with '\\n'"))
@@ -59,27 +70,41 @@ impl Suffix {
         }
     }
 
-    fn encode(self, buf: &mut Vec<u8>) {
+    fn encode(self, dst: &mut BytesMut) {
         match self {
             Suffix::None => (),
-            Suffix::NewLine => buf.push(b'\n'),
+            Suffix::NewLine => dst.put(b'\n'),
         }
     }
 }
 
-impl tokio_core::io::Codec for Codec {
-    type In = Vec<u8>;
-    type Out = Vec<u8>;
+impl Encoder for LengthPrefixed {
+    type Item = BytesMut;
+    type Error = io::Error;
 
-    fn decode(&mut self, buf: &mut EasyBuf) -> io::Result<Option<Self::In>> {
-        match self.0.decode(buf.as_slice()) {
+    fn encode( &mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
+        let data_len = item.len() + self.1.len();
+        dst.reserve(data_len + self.0.encoded_len(data_len));
+        self.0.encode(data_len, dst)?;
+        dst.put(item);
+        self.1.encode(dst);
+        Ok(())
+    }
+}
+
+impl Decoder for LengthPrefixed {
+    type Item = BytesMut;
+    type Error = io::Error;
+
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        match self.0.decode(src) {
             Ok((len, len_len)) => {
-                if len + len_len <= buf.len() {
-                    buf.drain_to(len_len); // discard the length
-                    let mut msg = buf.drain_to(len);
-                    self.1.validate(msg.as_slice())?;
+                if len + len_len <= src.len() {
+                    src.split_to(len_len); // discard the length
+                    let mut msg = src.split_to(len);
+                    self.1.validate(&mut msg)?;
                     msg.split_off(len - self.1.len());
-                    Ok(Some(msg.as_ref().to_vec()))
+                    Ok(Some(msg))
                 } else {
                     Ok(None)
                 }
@@ -93,11 +118,6 @@ impl tokio_core::io::Codec for Codec {
             }
         }
     }
-
-    fn encode(&mut self, msg: Self::Out, buf: &mut Vec<u8>) -> io::Result<()> {
-        self.0.encode(msg.len() + self.1.len(), buf)?;
-        buf.write_all(&msg)?;
-        self.1.encode(buf);
-        Ok(())
-    }
 }
+
+impl Codec for LengthPrefixed { }
