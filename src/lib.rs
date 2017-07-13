@@ -6,7 +6,7 @@ extern crate varmint;
 
 use std::io;
 
-use bytes::BytesMut;
+use bytes::Bytes;
 use futures::sink::Sink;
 use futures::stream::Stream;
 use tokio_io::{AsyncRead, AsyncWrite};
@@ -19,14 +19,14 @@ pub use codec::{LengthPrefixed, Prefix, Suffix};
 pub use framed::MsgFramed;
 
 pub trait Codec
-    : Decoder<Item=BytesMut, Error=io::Error>
-    + Encoder<Item=BytesMut, Error=io::Error>
+    : Decoder<Item=Bytes, Error=io::Error>
+    + Encoder<Item=Bytes, Error=io::Error>
 {
 }
 
 pub trait MsgIo
-    : Sink<SinkItem=BytesMut, SinkError=io::Error>
-    + Stream<Item=BytesMut, Error=io::Error>
+    : Sink<SinkItem=Bytes, SinkError=io::Error>
+    + Stream<Item=Bytes, Error=io::Error>
 {
     fn framed<T: Codec>(self, codec: T) -> MsgFramed<Self, T> where Self: Sized {
         MsgFramed::new(self, codec)

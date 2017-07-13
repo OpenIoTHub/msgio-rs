@@ -1,7 +1,7 @@
 use std::io;
 
 use futures::{Async, AsyncSink, StartSend, Stream, Sink, Poll};
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 
 use {MsgIo, Codec};
 
@@ -28,7 +28,7 @@ impl<S: MsgIo, T: Codec> MsgFramed<S, T> {
 }
 
 impl<S: MsgIo, T: Codec> Stream for MsgFramed<S, T> {
-    type Item = BytesMut;
+    type Item = Bytes;
     type Error = io::Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
@@ -43,17 +43,17 @@ impl<S: MsgIo, T: Codec> Stream for MsgFramed<S, T> {
 }
 
 impl<S: MsgIo, T: Codec> Sink for MsgFramed<S, T> {
-    type SinkItem = BytesMut;
+    type SinkItem = Bytes;
     type SinkError = io::Error;
 
     fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
         let mut buffer = BytesMut::with_capacity(self.out_buffer_size);
         self.codec.encode(item, &mut buffer)?;
         self.out_buffer_size = (self.out_buffer_size + buffer.len()) / 2;
-        Ok(match self.transport.start_send(buffer)? {
+        Ok(match self.transport.start_send(buffer.freeze())? {
             AsyncSink::Ready => AsyncSink::Ready,
-            AsyncSink::NotReady(mut buffer) => {
-                AsyncSink::NotReady(self.codec.decode(&mut buffer).unwrap().expect("codec is reversible"))
+            AsyncSink::NotReady(buffer) => {
+                AsyncSink::NotReady(self.codec.decode(&mut buffer.try_mut().unwrap()).unwrap().expect("codec is reversible"))
             }
         })
     }

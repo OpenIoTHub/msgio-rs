@@ -1,6 +1,6 @@
 use std::io::{self, Cursor};
 
-use bytes::{BigEndian, Buf, BufMut, BytesMut};
+use bytes::{BigEndian, Buf, BufMut, Bytes, BytesMut};
 use varmint::{len_usize_varint, ReadVarInt, WriteVarInt};
 use tokio_io::codec::{Decoder, Encoder};
 
@@ -79,10 +79,10 @@ impl Suffix {
 }
 
 impl Encoder for LengthPrefixed {
-    type Item = BytesMut;
+    type Item = Bytes;
     type Error = io::Error;
 
-    fn encode( &mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
+    fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
         let data_len = item.len() + self.1.len();
         dst.reserve(data_len + self.0.encoded_len(data_len));
         self.0.encode(data_len, dst)?;
@@ -93,7 +93,7 @@ impl Encoder for LengthPrefixed {
 }
 
 impl Decoder for LengthPrefixed {
-    type Item = BytesMut;
+    type Item = Bytes;
     type Error = io::Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
@@ -104,7 +104,7 @@ impl Decoder for LengthPrefixed {
                     let mut msg = src.split_to(len);
                     self.1.validate(&mut msg)?;
                     msg.split_off(len - self.1.len());
-                    Ok(Some(msg))
+                    Ok(Some(msg.freeze()))
                 } else {
                     Ok(None)
                 }
