@@ -22,13 +22,18 @@ pub enum Suffix {
 pub struct LengthPrefixed(pub Prefix, pub Suffix);
 
 impl Prefix {
-    fn decode(self, src: &[u8]) -> io::Result<(usize, usize)> {
+    fn decode(self, src: &[u8]) -> io::Result<Option<(usize, usize)>> {
         let mut cursor = Cursor::new(src);
-        let len = match self {
-            Prefix::VarInt => cursor.read_usize_varint()?,
-            Prefix::BigEndianU32 => cursor.get_u32::<BigEndian>() as usize,
-        };
-        Ok((len, cursor.position() as usize))
+        Ok(match self {
+            Prefix::VarInt => cursor.try_read_usize_varint()?,
+            Prefix::BigEndianU32 => {
+                if src.len() >= 4 {
+                    Some(cursor.get_u32::<BigEndian>() as usize)
+                } else {
+                    None
+                }
+            }
+        }.map(|len| (len, cursor.position() as usize)))
     }
 
     fn encode(self, len: usize, dst: &mut BytesMut) -> io::Result<()> {
@@ -97,25 +102,18 @@ impl Decoder for LengthPrefixed {
     type Error = io::Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        match self.0.decode(src) {
-            Ok((len, len_len)) => {
-                if len + len_len <= src.len() {
-                    src.split_to(len_len); // discard the length
-                    let mut msg = src.split_to(len);
-                    self.1.validate(&mut msg)?;
-                    msg.split_off(len - self.1.len());
-                    Ok(Some(msg.freeze()))
-                } else {
-                    Ok(None)
-                }
+        if let Some((len, len_len)) = self.0.decode(src)? {
+            if len + len_len <= src.len() {
+                src.split_to(len_len); // discard the length
+                let mut msg = src.split_to(len);
+                self.1.validate(&mut msg)?;
+                msg.split_off(len - self.1.len());
+                Ok(Some(msg.freeze()))
+            } else {
+                Ok(None)
             }
-            Err(err) => {
-                if err.kind() == io::ErrorKind::UnexpectedEof {
-                    Ok(None)
-                } else {
-                    Err(err)
-                }
-            }
+        } else {
+            Ok(None)
         }
     }
 }
