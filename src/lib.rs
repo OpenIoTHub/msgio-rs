@@ -14,14 +14,22 @@ use tokio_io::codec::{Decoder, Encoder, Framed};
 
 mod codec;
 mod framed;
+mod stack;
 
 pub use codec::{LengthPrefixed, Prefix, Suffix};
 pub use framed::MsgFramed;
+pub use stack::Stacked;
 
 pub trait Codec
     : Decoder<Item=Bytes, Error=io::Error>
     + Encoder<Item=Bytes, Error=io::Error>
 {
+    fn stack<T>(self, upper: T) -> Stacked<T, Self>
+        where T: Encoder<Error=io::Error> + Decoder<Error=io::Error>,
+              Self: Sized
+    {
+        Stacked::new(upper, self)
+    }
 }
 
 pub trait MsgIo
