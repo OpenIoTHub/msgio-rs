@@ -33,4 +33,4 @@ pub trait MsgIo
     }
 }
 
-impl<T: AsyncRead + AsyncWrite> MsgIo for Framed<T, LengthPrefixed> { }
+impl<T: AsyncRead + AsyncWrite, S: Codec> MsgIo for Framed<T, S> { }
