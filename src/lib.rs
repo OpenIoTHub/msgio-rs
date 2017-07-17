@@ -15,10 +15,12 @@ use tokio_io::codec::{Decoder, Encoder, Framed};
 mod codec;
 mod framed;
 mod stack;
+mod identity;
 
 pub use codec::{LengthPrefixed, Prefix, Suffix};
 pub use framed::MsgFramed;
 pub use stack::Stacked;
+pub use identity::Identity;
 
 pub trait Codec
     : Decoder<Item=Bytes, Error=io::Error>

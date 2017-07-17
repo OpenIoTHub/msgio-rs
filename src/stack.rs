@@ -27,6 +27,11 @@ impl<T, S> Stacked<T, S>
             encode_buffer: BytesMut::new(),
         }
     }
+
+    pub fn split(self) -> (T, S) {
+        assert!(self.decode_buffer.is_empty());
+        (self.upper, self.lower)
+    }
 }
 
 impl<T, S> Decoder for Stacked<T, S>
