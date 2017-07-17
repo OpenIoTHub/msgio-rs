@@ -29,6 +29,7 @@ impl<T, S> Stacked<T, S>
     }
 
     pub fn split(self) -> (T, S) {
+        println!("self.decode_buffer: {:?}", self.decode_buffer);
         assert!(self.decode_buffer.is_empty());
         (self.upper, self.lower)
     }
@@ -36,17 +37,36 @@ impl<T, S> Stacked<T, S>
 
 impl<T, S> Decoder for Stacked<T, S>
     where T: Encoder<Error=io::Error> + Decoder<Error=io::Error>,
-          S: Encoder<Item=Bytes, Error=io::Error> + Decoder<Item=Bytes, Error=io::Error>
+          S: Encoder<Item=Bytes, Error=io::Error> + Decoder<Item=Bytes, Error=io::Error>,
+          <T as Decoder>::Item: ::std::fmt::Debug
 {
     type Item = <T as Decoder>::Item;
     type Error = io::Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        if let Some(bytes) = self.lower.decode(src)? {
-            self.decode_buffer.reserve(bytes.len());
-            self.decode_buffer.put(bytes);
+        println!("stack::decode({:?})", src);
+        // Need to give upper codec a chance to decode first in case there
+        // were multiple upper items in the last lower item.
+        if let Some(result) = self.upper.decode(&mut self.decode_buffer)? {
+            println!("upper decoded {:?}", result);
+            Ok(Some(result))
+        } else {
+            if let Some(bytes) = self.lower.decode(src)? {
+                println!("lower decoded {:?}", bytes);
+                // New lower item, append it to the buffer and give upper codec
+                // a chance to decode it
+                self.decode_buffer.reserve(bytes.len());
+                self.decode_buffer.put(bytes);
+                if let Some(result) = self.upper.decode(&mut self.decode_buffer)? {
+                    println!("upper decoded {:?}", result);
+                    Ok(Some(result))
+                } else {
+                    Ok(None)
+                }
+            } else {
+                Ok(None)
+            }
         }
-        self.upper.decode(&mut self.decode_buffer)
     }
 }
 
