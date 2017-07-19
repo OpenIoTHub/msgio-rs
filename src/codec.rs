@@ -4,8 +4,6 @@ use bytes::{BigEndian, Buf, BufMut, Bytes, BytesMut};
 use varmint::{len_usize_varint, ReadVarInt, WriteVarInt};
 use tokio_io::codec::{Decoder, Encoder};
 
-use Codec;
-
 #[derive(Copy, Clone, Debug)]
 pub enum Prefix {
     VarInt,
@@ -117,5 +115,3 @@ impl Decoder for LengthPrefixed {
         }
     }
 }
-
-impl Codec for LengthPrefixed { }

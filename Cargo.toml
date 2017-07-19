@@ -6,9 +6,5 @@ version = "0.1.0"
 [dependencies]
 bytes = "0.4.4"
 futures = "0.1.14"
+tokio-io = "0.1.2"
 varmint = "0.1.2"
-
-[dependencies.tokio-io]
-version = "0.1.2"
-git = "https://github.com/stbuehler/tokio-io"
-rev = "80c1026901e59f100a2a6339d4dc8d7f0b47d330"
