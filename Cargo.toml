@@ -1,9 +1,11 @@
 [package]
 authors = ["Wim Looman <wim@nemo157.com>"]
 name = "msgio"
-version = "0.1.0"
+version = "0.1.1"
 description = "message io"
 license = "MIT"
+homepage = "https://iothub.cloud/"
+repository = "https://github.com/OpenIoTHub/msgio-rs"
 
 [dependencies]
 bytes = "0.4.4"
