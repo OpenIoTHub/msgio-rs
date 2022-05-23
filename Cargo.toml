@@ -2,6 +2,8 @@
 authors = ["Wim Looman <wim@nemo157.com>"]
 name = "msgio"
 version = "0.1.0"
+description = "message io"
+license = "MIT"
 
 [dependencies]
 bytes = "0.4.4"
